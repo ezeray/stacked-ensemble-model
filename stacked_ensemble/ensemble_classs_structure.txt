@@ -1,0 +1,34 @@
+StackedEnsembleModel()
+
+Methods in the class.
+
+general:
+    - set_preprocessor()
+    - get_preprocessor()
+    - set_base_models()
+    - get_base_models()
+    - set_meta_model()
+    - get_meta_model()
+    - set_base_tuning_param_grid()
+    - get_base_tuning_param_grid()
+    - set_meta_tuning_param_grid()
+    - get_meta_tuning_param_grid()
+    - save_stacker()
+    - load_stacker() [static-method]
+
+preprocessor:
+    - preprocessor_fit()
+    - preprocessor_transform()
+    - preprocessor_fit_transform()
+
+base models:
+    - base_tune_hyper_parameters()
+    - base_fit()
+    - base_predict()
+    - base_fit_predict()
+
+meta model:
+    - meta_tune_hyper_parameters()
+    - meta_fit()
+    - meta_predict()
+    - meta_fit_predict()

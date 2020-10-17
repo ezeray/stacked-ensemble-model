@@ -1,7 +1,5 @@
-#!/home/pi/datasci/bin/python3
 # -*- coding: utf-8 -*-
 import logging
-from datetime import datetime as dt
 import numpy as np
 import pandas as pd
 from time import time
@@ -9,78 +7,7 @@ import pickle
 from sklearn.model_selection import (
     GridSearchCV, StratifiedKFold
 )
-import scipy.sparse.csr as csr
-
-
-def create_logger(name):
-    """Create logger instance.
-
-    Args:
-        name (str): File and logger name
-
-    Returns:
-        logger: logger instance
-    """
-    # create logger instance
-    log = logging.getLogger(name)
-    log.setLevel(logging.DEBUG)
-    now = dt.now().strftime('%Y-%m-%d_%H-%M-%S')
-    # create file handler
-    fh = logging.FileHandler(f'{name}_{now}.log')
-    fh.setLevel(logging.DEBUG)
-    # create console handler
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.ERROR)
-    # format
-    my_fmt = logging.Formatter(
-        '%(asctime)s -- %(name)s -- %(levelname)s -- %(message)s'
-    )
-    fh.setFormatter(my_fmt)
-    ch.setFormatter(my_fmt)
-    log.addHandler(fh)
-    log.addHandler(ch)
-    return log
-
-
-def convert_time(time):
-    """
-    Takes a measure in seconds and converts to the most appropriate
-    format.
-    Returns a string in float format with two decimals
-    """
-    if not (isinstance(time, int) or isinstance(time, float)):
-        raise TypeError('time has to be either int or float')
-    if time < 60:
-        return f'{time:02.2f} seconds'
-    elif time < 60*60:
-        minutes = time // 60
-        seconds = time % 60
-        return f'{minutes:02.0f}:{seconds:02.2f} minutes'
-    else:
-        seconds = time % 60
-        time_left = time // 60
-        minutes = time_left % 24
-        hours = time_left // 24
-        return f'{hours:02.0f}:{minutes:02.0f}:{seconds:02.2f} hours'
-
-
-def check_input_data_type(data, one_dim=False):
-    if isinstance(data, pd.core.series.Series):
-        return data.values.reshape(-1)
-    if isinstance(data, pd.core.frame.DataFrame):
-        return data.values
-    if isinstance(data, np.ndarray):
-        if one_dim:
-            return data.reshape(-1)
-        else:
-            return data
-    if isinstance(data, csr.csr_matrix):
-        return data
-    else:
-        raise TypeError(
-            'Data should be either a numpy array, a pandas '
-            'dataframe/series, or a scipy sparse matrix.'
-        )
+import base_funcs.BaseHelpFuncs as hf
 
 
 class StackedEnsembleModel():
@@ -160,12 +87,11 @@ class StackedEnsembleModel():
                             'transform any data.'
                             )
 
-        X = check_input_data_type(X)
+        X = hf.check_input_data_type(X)
 
-        self.preprocessor.fit(X)
-        self.preprocessor_is_fit = True
+        self.preprocess_fit(X)
         return (
-            self.preprocessor.transform(X)
+            self.preprocess_transform(X)
         )
 
     def preprocess_fit(self, X):
@@ -173,17 +99,23 @@ class StackedEnsembleModel():
             raise TypeError('No preprocessor was passed so cannot fit '
                             'any data.'
                             )
-        X = check_input_data_type(X)
-        self.preprocessor.fit(X)
-        self.preprocessor_is_fit = True
+        X = hf.check_input_data_type(X)
+        if not self.preprocessor_is_fit:
+            self.preprocessor.fit(X)
+            self.preprocessor_is_fit = True
 
     def preprocess_transform(self, X):
         if self.preprocessor is None:
             raise TypeError('No preprocessor was passed so cannot '
                             'transform any data.'
                             )
-        X = check_input_data_type(X)
-        return self.preprocessor.transform(X)
+        X = hf.check_input_data_type(X)
+        if self.preprocessor_is_fit:
+            return self.preprocessor.transform(X)
+        else:
+            raise AttributeError(
+                'The preprocessor has not been fit so cannot apply transform.'
+            )
 
     def base_tune_params_fit(
         self, X_train, y_train, additional_grid_arguments={}
@@ -193,10 +125,10 @@ class StackedEnsembleModel():
                 'No parameters were passed for tuning.'
             )
 
-        X_train = check_input_data_type(X_train)
-        y_train = check_input_data_type(y_train, one_dim=True)
+        X_train = hf.check_input_data_type(X_train)
+        y_train = hf.check_input_data_type(y_train, one_dim=True)
 
-        logger = create_logger('Hyper-Param-Tuning')
+        logger = hf.create_logger('Hyper-Param-Tuning')
         logger.info('Tuning for hyperparameters has started.')
         tune_start = time()
 
@@ -236,7 +168,7 @@ class StackedEnsembleModel():
                     fit_start = time()
                     grid_search.fit(X_train, y_train)
                     fit_end = time()
-                    fit_time = convert_time(fit_end - fit_start)
+                    fit_time = hf.convert_time(fit_end - fit_start)
                     logger.info(f'The fit took {fit_time}')
 
                     best_estimator_str = '\t' +\
@@ -274,7 +206,7 @@ class StackedEnsembleModel():
             else:
                 logger.info(f'Model {m} had previously been tuned.')
         tune_end = time()
-        tune_timer = convert_time(tune_end - tune_start)
+        tune_timer = hf.convert_time(tune_end - tune_start)
         logger.info(f'The copmlete tuning process took {tune_timer}')
         logging.shutdown()
 
@@ -286,11 +218,11 @@ class StackedEnsembleModel():
         # es decir, la 'metadata', son las predicciones que se
         # haga sobre el validation set, NO sobre el total
 
-        X_train = check_input_data_type(X_train)
-        X_test = check_input_data_type(X_test)
-        y_train = check_input_data_type(y_train, one_dim=True)
+        X_train = hf.check_input_data_type(X_train)
+        X_test = hf.check_input_data_type(X_test)
+        y_train = hf.check_input_data_type(y_train, one_dim=True)
 
-        logger = create_logger('Stacker-Model')
+        logger = hf.create_logger('Stacker-Model')
         logger.info('Stacking has started.')
         stack_start = time()
         models_for_stacking = list(self.base_models.keys())
@@ -368,7 +300,7 @@ class StackedEnsembleModel():
 
         self.stacker_is_fit = True
         stack_end = time()
-        stack_timer = convert_time(stack_end - stack_start)
+        stack_timer = hf.convert_time(stack_end - stack_start)
         logger.info(f'The copmlete stacking process took {stack_timer}')
         logging.shutdown()
 
@@ -404,8 +336,8 @@ class StackedEnsembleModel():
         # este hace un fit sin devolver nada
         # todavía no la terminé porque no me hace falta usarla
         # TERMINAR
-        X_train = check_input_data_type(X_train)
-        y_train = check_input_data_type(y_train, one_dim=True)
+        X_train = hf.check_input_data_type(X_train)
+        y_train = hf.check_input_data_type(y_train, one_dim=True)
 
         # self.stacker_is_fit = True
 
@@ -422,7 +354,7 @@ class StackedEnsembleModel():
         # por ejemplo, si se hizo un deployment y solo hace falta procesar
         # los datos para usarlos en el metaclasificador
 
-        X_test = check_input_data_type(X_test)
+        X_test = hf.check_input_data_type(X_test)
 
         not_yet_fit = [mod for mod in self.base_models.keys()
                        if mod not in self.stacker_models_are_fit.keys()]
@@ -460,7 +392,7 @@ class StackedEnsembleModel():
             )
 
     def meta_model_tune(self, X_train, y_train, verbosity):
-        logger = create_logger('Meta-Mdodel-Tuner')
+        logger = hf.create_logger('Meta-Mdodel-Tuner')
         logger.info('Started tuning hyperparameters for the metamodel')
         tune_start = time()
         if self.meta_hyper_param_tuners is None:
@@ -477,8 +409,8 @@ class StackedEnsembleModel():
                 'No meta model was passed so cannot tune hyper parameters '
                 'for it.'
             )
-        X_train = check_input_data_type(X_train)
-        y_train = check_input_data_type(y_train, one_dim=True)
+        X_train = hf.check_input_data_type(X_train)
+        y_train = hf.check_input_data_type(y_train, one_dim=True)
 
         try:
             meta_grid_search = GridSearchCV(
@@ -490,7 +422,7 @@ class StackedEnsembleModel():
             fit_start = time()
             meta_grid_search.fit(X_train, y_train)
             fit_end = time()
-            fit_timer = convert_time(fit_end - fit_start)
+            fit_timer = hf.convert_time(fit_end - fit_start)
             logger.info(
                 f'Fitting the grid search for the meta model took {fit_timer}'
             )
@@ -526,12 +458,12 @@ class StackedEnsembleModel():
             logger.exception('An error occurred when tuning the meta model.')
 
         tune_end = time()
-        tune_timer = convert_time(tune_end - tune_start)
+        tune_timer = hf.convert_time(tune_end - tune_start)
         logger.info(f'Tuning the meta model took {tune_timer}.')
         logging.shutdown()
 
     def meta_model_fit_predict(self, X_train, y_train, X_test):
-        logger = create_logger('Meta-Model-Fit')
+        logger = hf.create_logger('Meta-Model-Fit')
         logger.info('Fitting of the meta model has started.')
         if self.meta_model is None:
             logger.error(
@@ -545,9 +477,9 @@ class StackedEnsembleModel():
             f'The meta model that was passed to the StackerEnsembleModel is:\n'
             f'{meta_model_str}'
         )
-        X_train = check_input_data_type(X_train)
-        X_test = check_input_data_type(X_test)
-        y_train = check_input_data_type(y_train, one_dim=True)
+        X_train = hf.check_input_data_type(X_train)
+        X_test = hf.check_input_data_type(X_test)
+        y_train = hf.check_input_data_type(y_train, one_dim=True)
 
     def meta_model_fit(self):
         pass
